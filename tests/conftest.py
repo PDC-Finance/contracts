@@ -34,7 +34,7 @@ def dai(deployer):
 
 @pytest.fixture
 def deployed(deployer):
-    pdcFactoryDeployed = pdcFactory.deploy({'from': deployer})
+    pdcFactoryDeployed = pdcFactory.deploy("0xB3f5503f93d5Ef84b06993a1975B9D21B962892F", "0x2807B4aE232b624023f87d0e237A3B1bf200Fd99",{'from': deployer})
     return pdcFactoryDeployed
 
 ## Forces reset before each test

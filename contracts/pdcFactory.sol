@@ -2,18 +2,17 @@
 pragma solidity 0.8.1;
 
 import "./PDC.sol";
+import "./interfaces/Inft.sol";
 
 contract pdcFactory {
     PDC[] public pdcAccountList;
     address public factoryOwner;
     mapping(address => address) public pdcAccountListMapping;
     mapping(address => address) public pdcUserMapping;
-
-    event pdcAccount(address pdcSC, address pdcSCowner);
+    event PDCAccount(address pdcSCowner, address pdcSC);
 
     // bytes[] public pdcList;
-
-    event pdcCreated(
+    event PdcCreated(
         address owner,
         address pdcSC,
         address token,
@@ -22,7 +21,7 @@ contract pdcFactory {
         uint256 date,
         bool executed
     );
-    event pdcExecuted(
+    event PdcExecuted(
         address owner,
         address pdcSC,
         address token,
@@ -31,14 +30,27 @@ contract pdcFactory {
         uint256 date,
         bool executed
     );
-    event pdcReturned(string);
+    event PdcReturned(string);
 
     address public pdcFactoryAddress = address(this);
-    address internal ops = 0xB3f5503f93d5Ef84b06993a1975B9D21B962892F;
-    address internal treasury = 0x527a819db1eb0e34426297b03bae11F2f8B3A19E;
+    address internal ops;
+    address internal treasury;
+    address public createMetadata;
+    // address public pdcNFT;
 
-    constructor() {
+    Inft public IpdcNFT;
+
+    constructor(
+        address _ops,
+        address _treasury,
+        address _pdcNFT,
+        address _createMetadata
+    ) {
         factoryOwner = msg.sender;
+        ops = _ops;
+        treasury = _treasury;
+        IpdcNFT = Inft(_pdcNFT);
+        createMetadata = _createMetadata;
     }
 
     modifier onlyChild() {
@@ -46,7 +58,12 @@ contract pdcFactory {
         _;
     }
 
-    function createPDCAccount() public {
+    modifier onlyFactory() {
+        require(msg.sender == factoryOwner);
+        _;
+    }
+
+    function createPDCAccount() external {
         require(
             pdcUserMapping[msg.sender] == address(0),
             "PDC Account already exists for the user!"
@@ -55,13 +72,14 @@ contract pdcFactory {
             msg.sender,
             address(this),
             payable(ops),
-            treasury
+            treasury,
+            createMetadata
         );
         pdcAccountList.push(pdcAccountInstance);
         // pdcAccountListMapping[address(pdcAccountInstance)] = true;
         pdcAccountListMapping[address(pdcAccountInstance)] = msg.sender;
         pdcUserMapping[msg.sender] = address(pdcAccountInstance);
-        emit pdcAccount(msg.sender, address(pdcAccountInstance));
+        emit PDCAccount(msg.sender, address(pdcAccountInstance));
     }
 
     function updatepdcCreated(
@@ -71,9 +89,10 @@ contract pdcFactory {
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
+        bool executed,
+        uint256 tokenId
     ) external onlyChild {
-        emit pdcCreated(owner, pdcSC, token, receiver, amount, date, executed);
+        emit PdcCreated(owner, pdcSC, token, receiver, amount, date, executed);
     }
 
     function updatepdcExecuted(
@@ -83,8 +102,28 @@ contract pdcFactory {
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
-    ) public onlyChild {
-        emit pdcExecuted(owner, pdcSC, token, receiver, amount, date, executed);
+        bool executed,
+        uint256 tokenId
+    ) external onlyChild {
+        emit PdcExecuted(owner, pdcSC, token, receiver, amount, date, executed);
+    }
+
+    function mintPdcNFT(address to, string memory _uri)
+        external
+        onlyChild
+        returns (uint256)
+    {
+        uint256 tokenId = IpdcNFT.safeMint(to, _uri);
+        return tokenId;
+    }
+
+    function getNftOwner(uint256 _tokenId)
+        external
+        view
+        onlyChild
+        returns (address)
+    {
+        address pdcNftOwner = IpdcNFT.ownerOf(_tokenId);
+        return pdcNftOwner;
     }
 }

@@ -8,14 +8,16 @@ autofetch_sources: True
 
 # require OpenZepplin Contracts
 dependencies:
-  - OpenZeppelin/openzeppelin-contracts@4.7.3
+  - OpenZeppelin/openzeppelin-contracts@4.0.0
 
 # path remapping to support imports from GitHub/NPM
 compiler:
   solc:
     version: 0.8.1
+    settings:
+      { optimizer: { runs: 200, enabled: true, details: { yul: false } } }
     remappings:
-      - "@openzeppelin-contracts=OpenZeppelin/openzeppelin-contracts@4.7.3/contracts/"
+      - "@openzeppelin-contracts=OpenZeppelin/openzeppelin-contracts@4.0.0/contracts/"
 
 dotenv: .env
 

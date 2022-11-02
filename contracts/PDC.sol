@@ -4,11 +4,13 @@ pragma solidity 0.8.1;
 import "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin-contracts/security/ReentrancyGuard.sol";
-import "./IResolver.sol";
-import "./IpdcFactory.sol";
-import {OpsReady} from "./OpsReady.sol";
-import {IOps} from "./IOps.sol";
-import {ITaskTreasury} from "./ITaskTreasury.sol";
+import "./interfaces/IResolver.sol";
+import "./interfaces/IpdcFactory.sol";
+import {OpsReady} from "./interfaces/OpsReady.sol";
+import {IOps} from "./interfaces/IOps.sol";
+import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
+import "./interfaces/Inft.sol";
+import "./interfaces/ICreateMetadata.sol";
 
 contract PDC is IResolver, OpsReady, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -22,28 +24,32 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     // State variable
     bytes[] public pdcList;
 
-    event pdcCreated(
+    event PdcCreated(
         address owner,
         address pdcSC,
         address token,
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
+        bool executed,
+        uint256 tokenId
     );
-    event pdcExecuted(
+    event PdcExecuted(
         address owner,
         address pdcSC,
         address token,
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
+        bool executed,
+        uint256 tokenId
     );
-    event pdcReturned(string);
+    event PdcReturned(string);
     // address public PDCFACTORY = 0x417Bf7C9dc415FEEb693B6FE313d1186C692600F;
 
     IpdcFactory public pdcFactory;
+    Inft public IpdcNFT;
+    ICreateMetadata public createMetadata;
 
     receive() external payable {}
 
@@ -54,20 +60,24 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         _;
     }
 
+    // string public uri = "test";
+
     // modifier onlyFactory() {
     //     require(msg.sender == pdcFactoryAddress, "Only Factory");
     //     _;
-    // }
+    // } 0x0642E3426981cA8FCFeF74b493D5f7f90cA35035
 
     constructor(
         address _owner,
         address _pdcFactoryAddress,
         address payable _ops,
-        address _treasury
+        address _treasury,
+        address _createMetadata
     ) OpsReady(_ops, payable(_treasury)) {
         owner = _owner;
         pdcFactory = IpdcFactory(_pdcFactoryAddress);
         pdcSC = address(this);
+        createMetadata = ICreateMetadata(_createMetadata);
     }
 
     function topUp() external payable {}
@@ -77,14 +87,29 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         address _receiver,
         uint256 _amount,
         uint256 _date
-    ) external isOwner nonReentrant {
+    )
+        external
+        // string memory _uri
+        isOwner
+    {
         bool executed = false;
-        bytes memory pdc = abi.encode(
+        string memory _uri = createMetadata.buildMetadata(
             _token,
             _receiver,
             _amount,
             _date,
             executed
+        );
+        uint256 tokenId = pdcFactory.mintPdcNFT(_receiver, _uri);
+        // address pdcNftOwner = pdcFactory.getNftOwner(tokenId);
+        // _receiver = pdcNftOwner;
+        bytes memory pdc = abi.encode(
+            _token,
+            _receiver,
+            _amount,
+            _date,
+            executed,
+            tokenId
         );
         pdcList.push(pdc);
         pdcFactory.updatepdcCreated(
@@ -94,17 +119,19 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
             _receiver,
             _amount,
             _date,
-            executed
+            executed,
+            tokenId
         );
         createTaskNoPrepayment();
-        emit pdcCreated(
+        emit PdcCreated(
             owner,
             pdcSC,
             _token,
             _receiver,
             _amount,
             _date,
-            executed
+            executed,
+            tokenId
         );
     }
 
@@ -127,7 +154,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         return (token, receiver, amount, date, executed);
     }
 
-    function createTaskNoPrepayment() public isOwner nonReentrant {
+    function createTaskNoPrepayment() public isOwner {
         if (taskIdByUser[msg.sender] == bytes32(0)) {
             // bytes32 taskId;
             taskIdByUser[msg.sender] = IOps(ops).createTaskNoPrepayment(
@@ -142,31 +169,47 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     }
 
     function cancelTask(bytes32 taskId) external isOwner nonReentrant {
-        IOps(ops).cancelTask(taskId);
         taskIdByUser[msg.sender] = bytes32(0);
+        IOps(ops).cancelTask(taskId);
     }
 
     // solhint-disable not-rely-on-time
-    function executePDC(uint256 _id) public payable onlyOps returns (bool) {
+    function executePDC(uint256 _id)
+        external
+        payable
+        onlyOps
+        nonReentrant
+        returns (bool)
+    {
         (
             address token,
             address receiver,
             uint256 amount,
             uint256 date,
-            bool executed
+            bool executed,
+            uint256 tokenId
         ) = abi.decode(
                 pdcList[_id],
-                (address, address, uint256, uint256, bool)
+                (address, address, uint256, uint256, bool, uint256)
             );
         require(
             block.timestamp >= date && !executed,
             "Not yet time for payment"
         );
         executed = true;
-        pdcList[_id] = abi.encode(token, receiver, amount, date, executed);
+        pdcList[_id] = abi.encode(
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
         uint256 balance = IERC20(token).balanceOf(address(this));
         if (balance > amount) {
             IERC20(token).safeApprove(address(this), amount);
+            address pdcNftOwner = pdcFactory.getNftOwner(tokenId);
+            receiver = pdcNftOwner;
             IERC20(token).safeTransferFrom(address(this), receiver, amount);
             pdcFactory.updatepdcExecuted(
                 owner,
@@ -175,16 +218,18 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
                 receiver,
                 amount,
                 date,
-                executed
+                executed,
+                tokenId
             );
-            emit pdcExecuted(
+            emit PdcExecuted(
                 owner,
                 pdcSC,
                 token,
                 receiver,
                 amount,
                 date,
-                executed
+                executed,
+                tokenId
             );
             uint256 fee;
             address feeToken;
@@ -197,8 +242,17 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
             _transfer(fee, feeToken);
             return false;
         } // check this scenario
-        emit pdcExecuted(owner, pdcSC, token, receiver, amount, date, executed);
-        emit pdcReturned("Not sufficient balance for payment");
+        emit PdcExecuted(
+            owner,
+            pdcSC,
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
+        emit PdcReturned("Not sufficient balance for payment");
     }
 
     function checker()
@@ -236,14 +290,14 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     }
 
     function getBalance(address _token, address _holder)
-        public
+        external
         view
         returns (uint256)
     {
         return IERC20(_token).balanceOf(_holder);
     }
 
-    function withdraw(address _tokenAddress) public isOwner {
+    function withdraw(address _tokenAddress) external isOwner {
         uint256 balance = address(this).balance;
         if (balance > 0) {
             payable(owner).transfer(balance);
