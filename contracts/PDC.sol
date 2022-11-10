@@ -11,6 +11,7 @@ import {IOps} from "./interfaces/IOps.sol";
 import {ITaskTreasury} from "./interfaces/ITaskTreasury.sol";
 import "./interfaces/Inft.sol";
 import "./interfaces/ICreateMetadata.sol";
+import "@openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract PDC is IResolver, OpsReady, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -27,7 +28,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     event PdcCreated(
         address owner,
         address pdcSC,
-        address token,
+        string token,
         address receiver,
         uint256 amount,
         uint256 date,
@@ -37,7 +38,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     event PdcExecuted(
         address owner,
         address pdcSC,
-        address token,
+        string token,
         address receiver,
         uint256 amount,
         uint256 date,
@@ -48,7 +49,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
     // address public PDCFACTORY = 0x417Bf7C9dc415FEEb693B6FE313d1186C692600F;
 
     IpdcFactory public pdcFactory;
-    Inft public IpdcNFT;
+    Inft public pdcNFT;
     ICreateMetadata public createMetadata;
 
     receive() external payable {}
@@ -72,11 +73,13 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         address _pdcFactoryAddress,
         address payable _ops,
         address _treasury,
+        address _pdcNFT,
         address _createMetadata
     ) OpsReady(_ops, payable(_treasury)) {
         owner = _owner;
         pdcFactory = IpdcFactory(_pdcFactoryAddress);
         pdcSC = address(this);
+        pdcNFT = Inft(_pdcNFT);
         createMetadata = ICreateMetadata(_createMetadata);
     }
 
@@ -93,12 +96,13 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         isOwner
     {
         bool executed = false;
+        uint256 _tokenId = pdcNFT.getCurrentToken();
         string memory _uri = createMetadata.buildMetadata(
             _token,
             _receiver,
             _amount,
             _date,
-            executed
+            _tokenId
         );
         uint256 tokenId = pdcFactory.mintPdcNFT(_receiver, _uri);
         // address pdcNftOwner = pdcFactory.getNftOwner(tokenId);
@@ -115,7 +119,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         pdcFactory.updatepdcCreated(
             owner,
             pdcSC,
-            _token,
+            getTokenSymbol(_token),
             _receiver,
             _amount,
             _date,
@@ -126,7 +130,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         emit PdcCreated(
             owner,
             pdcSC,
-            _token,
+            getTokenSymbol(_token),
             _receiver,
             _amount,
             _date,
@@ -214,7 +218,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
             pdcFactory.updatepdcExecuted(
                 owner,
                 pdcSC,
-                token,
+                getTokenSymbol(token),
                 receiver,
                 amount,
                 date,
@@ -224,7 +228,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
             emit PdcExecuted(
                 owner,
                 pdcSC,
-                token,
+                getTokenSymbol(token),
                 receiver,
                 amount,
                 date,
@@ -245,7 +249,7 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         emit PdcExecuted(
             owner,
             pdcSC,
-            token,
+            getTokenSymbol(token),
             receiver,
             amount,
             date,
@@ -295,6 +299,16 @@ contract PDC is IResolver, OpsReady, ReentrancyGuard {
         returns (uint256)
     {
         return IERC20(_token).balanceOf(_holder);
+    }
+
+    function getTokenSymbol(address _token)
+        public
+        view
+        returns (string memory _symbol)
+    {
+        IERC20Metadata tokencontract = IERC20Metadata(_token);
+        _symbol = tokencontract.symbol();
+        return _symbol;
     }
 
     function withdraw(address _tokenAddress) external isOwner {

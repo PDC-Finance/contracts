@@ -8,8 +8,6 @@ import "./interfaces/IpdcFactory.sol";
 import "@openzeppelin-contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin-contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-// import "./CreateMetadata.sol";
-
 contract PostDatedCryptoPayment is
     ERC721,
     ERC721Enumerable,
@@ -49,7 +47,13 @@ contract PostDatedCryptoPayment is
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
+
         _setTokenURI(tokenId, uri);
+        return tokenId;
+    }
+
+    function getCurrentToken() public view returns (uint256) {
+        uint256 tokenId = _tokenIdCounter.current();
         return tokenId;
     }
 

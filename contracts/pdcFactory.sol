@@ -15,20 +15,22 @@ contract pdcFactory {
     event PdcCreated(
         address owner,
         address pdcSC,
-        address token,
+        string token,
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
+        bool executed,
+        uint256 tokenId
     );
     event PdcExecuted(
         address owner,
         address pdcSC,
-        address token,
+        string token,
         address receiver,
         uint256 amount,
         uint256 date,
-        bool executed
+        bool executed,
+        uint256 tokenId
     );
     event PdcReturned(string);
 
@@ -36,7 +38,7 @@ contract pdcFactory {
     address internal ops;
     address internal treasury;
     address public createMetadata;
-    // address public pdcNFT;
+    address public pdcNFT;
 
     Inft public IpdcNFT;
 
@@ -49,8 +51,9 @@ contract pdcFactory {
         factoryOwner = msg.sender;
         ops = _ops;
         treasury = _treasury;
-        IpdcNFT = Inft(_pdcNFT);
+        pdcNFT = _pdcNFT;
         createMetadata = _createMetadata;
+        IpdcNFT = Inft(_pdcNFT);
     }
 
     modifier onlyChild() {
@@ -73,6 +76,7 @@ contract pdcFactory {
             address(this),
             payable(ops),
             treasury,
+            pdcNFT,
             createMetadata
         );
         pdcAccountList.push(pdcAccountInstance);
@@ -85,27 +89,45 @@ contract pdcFactory {
     function updatepdcCreated(
         address owner,
         address pdcSC,
-        address token,
+        string memory token,
         address receiver,
         uint256 amount,
         uint256 date,
         bool executed,
         uint256 tokenId
     ) external onlyChild {
-        emit PdcCreated(owner, pdcSC, token, receiver, amount, date, executed);
+        emit PdcCreated(
+            owner,
+            pdcSC,
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
     }
 
     function updatepdcExecuted(
         address owner,
         address pdcSC,
-        address token,
+        string memory token,
         address receiver,
         uint256 amount,
         uint256 date,
         bool executed,
         uint256 tokenId
     ) external onlyChild {
-        emit PdcExecuted(owner, pdcSC, token, receiver, amount, date, executed);
+        emit PdcExecuted(
+            owner,
+            pdcSC,
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
     }
 
     function mintPdcNFT(address to, string memory _uri)
