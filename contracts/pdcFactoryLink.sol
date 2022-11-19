@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.6;
+
+import "./PDCLink.sol";
+import "../interfaces/Inft.sol";
+
+contract pdcFactory {
+    PDC[] public pdcAccountList;
+    address public factoryOwner;
+    mapping(address => address) public pdcAccountListMapping;
+    mapping(address => address) public pdcUserMapping;
+    event PDCAccount(address pdcSCowner, address pdcSC);
+
+    // bytes[] public pdcList;
+    event PdcCreated(
+        address owner,
+        address pdcSC,
+        string token,
+        address receiver,
+        uint256 amount,
+        uint256 date,
+        bool executed,
+        uint256 tokenId
+    );
+    event PdcExecuted(
+        address owner,
+        address pdcSC,
+        string token,
+        address receiver,
+        uint256 amount,
+        uint256 date,
+        bool executed,
+        uint256 tokenId
+    );
+    event PdcReturned(string);
+
+    address public pdcFactoryAddress = address(this);
+    address public createMetadata;
+    address public pdcNFT;
+    // address public Link;
+    // address public registrar;
+    // address public registry;
+
+    Inft public IpdcNFT;
+
+    constructor(address _pdcNFT, address _createMetadata) {
+        factoryOwner = msg.sender;
+        pdcNFT = _pdcNFT;
+        createMetadata = _createMetadata;
+        IpdcNFT = Inft(_pdcNFT);
+    }
+
+    modifier onlyChild() {
+        require(pdcAccountListMapping[msg.sender] != address(0));
+        _;
+    }
+
+    modifier onlyFactory() {
+        require(msg.sender == factoryOwner);
+        _;
+    }
+
+    function createPDCAccount() external {
+        require(
+            pdcUserMapping[msg.sender] == address(0),
+            "PDC Account already exists for the user!"
+        );
+        PDC pdcAccountInstance = new PDC(
+            msg.sender,
+            address(this),
+            pdcNFT,
+            createMetadata
+        );
+        pdcAccountList.push(pdcAccountInstance);
+        // pdcAccountListMapping[address(pdcAccountInstance)] = true;
+        pdcAccountListMapping[address(pdcAccountInstance)] = msg.sender;
+        pdcUserMapping[msg.sender] = address(pdcAccountInstance);
+        emit PDCAccount(msg.sender, address(pdcAccountInstance));
+    }
+
+    function updatepdcCreated(
+        address owner,
+        address pdcSC,
+        string memory token,
+        address receiver,
+        uint256 amount,
+        uint256 date,
+        bool executed,
+        uint256 tokenId
+    ) external onlyChild {
+        emit PdcCreated(
+            owner,
+            pdcSC,
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
+    }
+
+    function updatepdcExecuted(
+        address owner,
+        address pdcSC,
+        string memory token,
+        address receiver,
+        uint256 amount,
+        uint256 date,
+        bool executed,
+        uint256 tokenId
+    ) external onlyChild {
+        emit PdcExecuted(
+            owner,
+            pdcSC,
+            token,
+            receiver,
+            amount,
+            date,
+            executed,
+            tokenId
+        );
+    }
+
+    function mintPdcNFT(address to, string memory _uri)
+        external
+        onlyChild
+        returns (uint256)
+    {
+        uint256 tokenId = IpdcNFT.safeMint(to, _uri);
+        return tokenId;
+    }
+
+    function getNftOwner(uint256 _tokenId)
+        external
+        view
+        onlyChild
+        returns (address)
+    {
+        address pdcNftOwner = IpdcNFT.ownerOf(_tokenId);
+        return pdcNftOwner;
+    }
+}
